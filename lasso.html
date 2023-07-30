@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.433">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Yang Chen">
+<meta name="author" content="Edward Baker">
+<meta name="dcterms.date" content="2023-07-30">
+
+<title>LASSO Regression and Tuning in Python</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="lasso_files/libs/clipboard/clipboard.min.js"></script>
+<script src="lasso_files/libs/quarto-html/quarto.js"></script>
+<script src="lasso_files/libs/quarto-html/popper.min.js"></script>
+<script src="lasso_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="lasso_files/libs/quarto-html/anchor.min.js"></script>
+<link href="lasso_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="lasso_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="lasso_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="lasso_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="lasso_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" integrity="sha512-c3Nl8+7g4LMSTdrm621y7kf9v3SDPnhxLNhcjFJbKECVnmZHTdo+IRO05sNLTH/D3vA6u1X32ehoLC7WFVdheg==" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">LASSO Regression and Tuning in Python</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Authors</div>
+    <div class="quarto-title-meta-contents">
+             <p>Yang Chen </p>
+             <p>Edward Baker </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">July 30, 2023</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<p>We’ll be focus purely on implementing LASSO regression through Python. There’s a number of steps that you can take with your data (e.g.&nbsp;association tests, exploratory data analysis) before running straight to LASSO. But something interesting about regularized regression models is how they tend to filter out variables with high pair-wise correlations.</p>
+<p>Remember that regularized regression models are just a start in understanding what variables you might want to include–they shouldn’t be the final verdict.</p>
+<section id="setup" class="level1">
+<h1>Setup</h1>
+<p>First, you’re going to need to setup your conda environment to install all the packages you will need to do a LASSO regression.</p>
+<p>We’ll be using the following packages:</p>
+<ul>
+<li><code>pandas</code> for data collection and manipulation</li>
+<li><code>numpy</code> for vectorized mathematical operations</li>
+<li><code>sklearn</code> for the Lasso regression model and train-test splitting</li>
+<li><code>matplotlib</code> for plotting / visualization capabilities</li>
+</ul>
+<p>Note: There is a package called <code>rpy2</code> that will allow your to interface with R through Python. However, we won’t be using that during the presentation due to potential installation problems for different systems.</p>
+<div class="cell" data-execution_count="70">
+<details open="">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Importing necessary packages</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.linear_model <span class="im">import</span> Lasso, LassoCV</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.model_selection <span class="im">import</span> train_test_split</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="data-loading" class="level1">
+<h1>Data Loading</h1>
+<p>The Ames Housing dataset is a popular dataset describing characteristics of residential homes in Ames, Iowa. The goal is to predict the selling price of homes.</p>
+<div class="cell">
+<details open="">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Read in the AmesHousing data as a Pandas dataframe</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>ames <span class="op">=</span> pd.read_csv(<span class="st">'https://raw.githubusercontent.com/INRIA/scikit-learn-mooc/main/datasets/house_prices.csv'</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>ames.head()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="train-test-split-basic-preprocessing" class="level1">
+<h1>Train-Test Split, Basic Preprocessing</h1>
+<p>In this scenario, we’ve run through our initial exploratory analysis to filter our variables down to a subset of the original columns. We’re curious to see what variables are selected after fitting a LASSO regression.</p>
+<p>We’ll break up our data into training and test sets to keep an honest assessment of our model. Next, we’ll do some basic preprocessing and encode our categorical variables as 1’s and 0’s so we can use them in our model.</p>
+<div class="cell" data-execution_count="58">
+<details open="">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Split our data into train and test sets with a 70-30 split</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>train, test <span class="op">=</span> train_test_split(ames, test_size<span class="op">=</span><span class="fl">0.3</span>, random_state<span class="op">=</span><span class="dv">123</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Select specific columns to base our model on</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> train[[<span class="st">'SalePrice'</span>, <span class="st">'LotArea'</span>, <span class="st">'Street'</span>, <span class="st">'BldgType'</span>, <span class="st">'HouseStyle'</span>, <span class="st">'OverallQual'</span>, <span class="st">'RoofStyle'</span>, <span class="st">'CentralAir'</span>, <span class="st">'1stFlrSF'</span>, <span class="st">'2ndFlrSF'</span>, <span class="st">'FullBath'</span>, <span class="st">'HalfBath'</span>, <span class="st">'Fireplaces'</span>, <span class="st">'GarageArea'</span>, <span class="st">'GrLivArea'</span>, <span class="st">'TotRmsAbvGrd'</span>]]</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Fill NA values with 0</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>train <span class="op">=</span> train.fillna(<span class="dv">0</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<div class="cell" data-execution_count="71">
+<details open="">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Reference encode our categorical variables so we can use them in our model</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>train_dummy <span class="op">=</span> pd.get_dummies(train, columns<span class="op">=</span>[<span class="st">'Street'</span>, <span class="st">'BldgType'</span>, <span class="st">'HouseStyle'</span>, <span class="st">'OverallQual'</span>, <span class="st">'RoofStyle'</span>, <span class="st">'CentralAir'</span>])</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>train_dummy</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="71">
+<div>
+
+
+<table class="dataframe table table-sm table-striped small" data-quarto-postprocess="true" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">SalePrice</th>
+<th data-quarto-table-cell-role="th">LotArea</th>
+<th data-quarto-table-cell-role="th">1stFlrSF</th>
+<th data-quarto-table-cell-role="th">2ndFlrSF</th>
+<th data-quarto-table-cell-role="th">FullBath</th>
+<th data-quarto-table-cell-role="th">HalfBath</th>
+<th data-quarto-table-cell-role="th">Fireplaces</th>
+<th data-quarto-table-cell-role="th">GarageArea</th>
+<th data-quarto-table-cell-role="th">GrLivArea</th>
+<th data-quarto-table-cell-role="th">TotRmsAbvGrd</th>
+<th data-quarto-table-cell-role="th">...</th>
+<th data-quarto-table-cell-role="th">OverallQual_9</th>
+<th data-quarto-table-cell-role="th">OverallQual_10</th>
+<th data-quarto-table-cell-role="th">RoofStyle_Flat</th>
+<th data-quarto-table-cell-role="th">RoofStyle_Gable</th>
+<th data-quarto-table-cell-role="th">RoofStyle_Gambrel</th>
+<th data-quarto-table-cell-role="th">RoofStyle_Hip</th>
+<th data-quarto-table-cell-role="th">RoofStyle_Mansard</th>
+<th data-quarto-table-cell-role="th">RoofStyle_Shed</th>
+<th data-quarto-table-cell-role="th">CentralAir_N</th>
+<th data-quarto-table-cell-role="th">CentralAir_Y</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">376</td>
+<td>148000</td>
+<td>8846</td>
+<td>914</td>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>576</td>
+<td>914</td>
+<td>5</td>
+<td>...</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">250</td>
+<td>76500</td>
+<td>5350</td>
+<td>1306</td>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>1306</td>
+<td>6</td>
+<td>...</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">228</td>
+<td>125000</td>
+<td>8521</td>
+<td>912</td>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>1</td>
+<td>336</td>
+<td>912</td>
+<td>5</td>
+<td>...</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">40</td>
+<td>160000</td>
+<td>8658</td>
+<td>1324</td>
+<td>0</td>
+<td>2</td>
+<td>0</td>
+<td>1</td>
+<td>440</td>
+<td>1324</td>
+<td>6</td>
+<td>...</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">428</td>
+<td>195400</td>
+<td>6762</td>
+<td>1208</td>
+<td>0</td>
+<td>2</td>
+<td>0</td>
+<td>0</td>
+<td>628</td>
+<td>1208</td>
+<td>6</td>
+<td>...</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+<td>...</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">1041</td>
+<td>173000</td>
+<td>9130</td>
+<td>800</td>
+<td>832</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>484</td>
+<td>1632</td>
+<td>7</td>
+<td>...</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">1122</td>
+<td>112000</td>
+<td>8926</td>
+<td>960</td>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>288</td>
+<td>960</td>
+<td>5</td>
+<td>...</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">1346</td>
+<td>262500</td>
+<td>20781</td>
+<td>2156</td>
+<td>0</td>
+<td>2</td>
+<td>0</td>
+<td>1</td>
+<td>508</td>
+<td>2156</td>
+<td>9</td>
+<td>...</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr class="even">
+<td data-quarto-table-cell-role="th">1406</td>
+<td>133000</td>
+<td>8445</td>
+<td>768</td>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>396</td>
+<td>768</td>
+<td>5</td>
+<td>...</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr class="odd">
+<td data-quarto-table-cell-role="th">1389</td>
+<td>131000</td>
+<td>6000</td>
+<td>869</td>
+<td>349</td>
+<td>1</td>
+<td>0</td>
+<td>1</td>
+<td>440</td>
+<td>1218</td>
+<td>6</td>
+<td>...</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>False</td>
+<td>True</td>
+</tr>
+</tbody>
+</table>
+
+<p>1022 rows × 43 columns</p>
+</div>
+</div>
+</div>
+</section>
+<section id="fitting-our-model" class="level1">
+<h1>Fitting Our Model</h1>
+<p>Using a LASSO model is super simple in Python. It’s just an <code>sklearn.linear_model</code> class that can take in an <code>alpha</code> argument which represents the penalty multiplier that we use when we fit the model. Here, we’ll select an arbitrary LASSO model with <code>alpha</code> = 2.0.</p>
+<div class="cell" data-execution_count="60">
+<details open="">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Get our explanatory variable X and our response variable y from the training data</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>X <span class="op">=</span> train_dummy.loc[:, train_dummy.columns.difference([<span class="st">'SalePrice'</span>])]</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> train_dummy[<span class="st">'SalePrice'</span>]</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Fit a Lasso regression model on our data</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co"># alpha argument is the constant that multiplies the L1 penalty term</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>ames_lasso <span class="op">=</span> Lasso(alpha <span class="op">=</span> <span class="fl">2.0</span>, max_iter<span class="op">=</span><span class="dv">5000</span>).fit(X, y)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<div class="cell" data-execution_count="61">
+<details open="">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>n_alphas <span class="op">=</span> <span class="dv">100</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>alphas2 <span class="op">=</span> np.logspace(<span class="dv">2</span>, <span class="dv">5</span>, n_alphas)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(alphas2)</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>coefs2 <span class="op">=</span> []</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> a <span class="kw">in</span> alphas2:</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    lasso <span class="op">=</span> Lasso(alpha <span class="op">=</span> a, max_iter<span class="op">=</span><span class="dv">5000</span>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    lasso.fit(X, y)</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    coefs2.append(lasso.coef_)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>[   100.            107.2267222     114.97569954    123.28467394
+    132.19411485    141.74741629    151.9911083     162.97508346
+    174.75284       187.38174229    200.92330026    215.443469
+    231.01297001    247.7076356     265.60877829    284.80358684
+    305.38555088    327.45491629    351.11917342    376.49358068
+    403.70172586    432.87612811    464.15888336    497.70235643
+    533.66992312    572.23676594    613.59072734    657.93322466
+    705.48023107    756.46332755    811.13083079    869.74900262
+    932.60334688   1000.           1072.26722201   1149.7569954
+   1232.84673944   1321.94114847   1417.47416293   1519.91108295
+   1629.75083462   1747.52840001   1873.81742286   2009.23300257
+   2154.43469003   2310.12970008   2477.07635599   2656.08778295
+   2848.03586844   3053.85550883   3274.54916288   3511.19173422
+   3764.93580679   4037.0172586    4328.76128108   4641.58883361
+   4977.02356433   5336.69923121   5722.36765935   6135.90727341
+   6579.33224658   7054.80231072   7564.63327555   8111.3083079
+   8697.49002618   9326.03346883  10000.          10722.6722201
+  11497.56995398  12328.46739442  13219.41148466  14174.74162927
+  15199.11082953  16297.50834621  17475.28400008  18738.1742286
+  20092.33002565  21544.34690032  23101.29700083  24770.76355992
+  26560.87782947  28480.35868436  30538.55508833  32745.49162878
+  35111.91734215  37649.35806792  40370.17258597  43287.61281083
+  46415.88833613  49770.23564332  53366.99231206  57223.6765935
+  61359.07273413  65793.32246576  70548.02310719  75646.33275546
+  81113.08307897  86974.90026178  93260.33468832 100000.        ]</code></pre>
+</div>
+<div class="cell-output cell-output-display" data-execution_count="61">
+<pre><code>array([ 7.58586141e+01,  6.87534921e+01,  8.06245328e+03,  0.00000000e+00,
+       -1.91344950e+04, -9.62040948e+03,  0.00000000e+00, -1.78442184e+04,
+        6.00179124e-09,  7.39001176e+03,  1.45812277e+04,  3.97732184e+01,
+       -2.65970396e+01,  1.05649433e+04, -7.19032717e+03,  0.00000000e+00,
+        1.10925754e+04, -0.00000000e+00, -2.45439137e+04, -2.55194730e+03,
+        1.78437607e+04,  3.19144231e+03,  4.49387431e-01, -0.00000000e+00,
+        1.44380910e+05, -0.00000000e+00, -2.63501189e+04, -1.73616781e+04,
+       -9.09418794e+03,  0.00000000e+00,  2.18579234e+04,  7.04923264e+04,
+        1.32455817e+05,  0.00000000e+00, -2.07379138e+03,  0.00000000e+00,
+        0.00000000e+00, -0.00000000e+00, -0.00000000e+00, -3.38546796e+03,
+        8.51085289e-10, -2.49513981e+02])</code></pre>
+</div>
+</div>
+<div class="cell" data-execution_count="62">
+<details open="">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>plt.cla()</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>ax <span class="op">=</span> plt.gca()</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>ax.plot(alphas2, coefs2)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>ax.set_xscale(<span class="st">'log'</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">'Log alpha'</span>)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>plt.ylabel(<span class="st">'weights'</span>)</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>plt.title(<span class="st">'LASSO Coefficients With Regularization'</span>)</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>plt.axis(<span class="st">'tight'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="62">
+<pre><code>(70.79457843841381,
+ 141253.75446227554,
+ -34886.670318502176,
+ 152917.46144539496)</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<p><img src="lasso_files/figure-html/cell-9-output-2.png" class="img-fluid"></p>
+</div>
+</div>
+</section>
+<section id="cross-validation-for-tuning" class="level1">
+<h1>Cross-Validation For Tuning</h1>
+<div class="cell" data-execution_count="63">
+<details open="">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>ames_lasso_cv <span class="op">=</span> LassoCV(cv<span class="op">=</span><span class="dv">10</span>, random_state<span class="op">=</span><span class="dv">123</span>).fit(X, y)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f'Chosen alpha: </span><span class="sc">{</span>ames_lasso_cv<span class="sc">.</span>alpha_<span class="sc">}</span><span class="ss">'</span>)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f'Weights: </span><span class="sc">{</span>ames_lasso_cv<span class="sc">.</span>coef_<span class="sc">}</span><span class="ss">'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Chosen alpha: 208023.67636015863
+Weights: [ 97.21482941  56.89753048   0.          -0.          -0.
+   0.           0.          -0.           0.           0.
+   0.         111.35060367   8.07840357   0.          -0.
+   0.           0.          -0.          -0.           0.
+   0.          -0.           0.19542406   0.           0.
+  -0.          -0.          -0.          -0.          -0.
+   0.           0.           0.          -0.          -0.
+  -0.           0.          -0.          -0.          -0.
+   0.          -0.        ]</code></pre>
+</div>
+</div>
+<div class="cell" data-execution_count="68">
+<details open="">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>selected_features <span class="op">=</span> pd.Series(ames_lasso_cv.coef_, index<span class="op">=</span>X.columns)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>selected_features</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="68">
+<pre><code>1stFlrSF              97.214829
+2ndFlrSF              56.897530
+BldgType_1Fam          0.000000
+BldgType_2fmCon       -0.000000
+BldgType_Duplex       -0.000000
+BldgType_Twnhs         0.000000
+BldgType_TwnhsE        0.000000
+CentralAir_N          -0.000000
+CentralAir_Y           0.000000
+Fireplaces             0.000000
+FullBath               0.000000
+GarageArea           111.350604
+GrLivArea              8.078404
+HalfBath               0.000000
+HouseStyle_1.5Fin     -0.000000
+HouseStyle_1.5Unf      0.000000
+HouseStyle_1Story      0.000000
+HouseStyle_2.5Fin     -0.000000
+HouseStyle_2.5Unf     -0.000000
+HouseStyle_2Story      0.000000
+HouseStyle_SFoyer      0.000000
+HouseStyle_SLvl       -0.000000
+LotArea                0.195424
+OverallQual_1          0.000000
+OverallQual_10         0.000000
+OverallQual_2         -0.000000
+OverallQual_3         -0.000000
+OverallQual_4         -0.000000
+OverallQual_5         -0.000000
+OverallQual_6         -0.000000
+OverallQual_7          0.000000
+OverallQual_8          0.000000
+OverallQual_9          0.000000
+RoofStyle_Flat        -0.000000
+RoofStyle_Gable       -0.000000
+RoofStyle_Gambrel     -0.000000
+RoofStyle_Hip          0.000000
+RoofStyle_Mansard     -0.000000
+RoofStyle_Shed        -0.000000
+Street_Grvl           -0.000000
+Street_Pave            0.000000
+TotRmsAbvGrd          -0.000000
+dtype: float64</code></pre>
+</div>
+</div>
+<div class="cell" data-execution_count="69">
+<details open="">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>selected_features[selected_features <span class="op">!=</span> <span class="dv">0</span>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="69">
+<pre><code>1stFlrSF       97.214829
+2ndFlrSF       56.897530
+GarageArea    111.350604
+GrLivArea       8.078404
+LotArea         0.195424
+dtype: float64</code></pre>
+</div>
+</div>
+<p>We can see that after running our cross-validation model, we are left with the following variables:</p>
+<ul>
+<li>1stFlrSF</li>
+<li>2ndFlrSF</li>
+<li>GarageArea</li>
+<li>GrLivArea</li>
+<li>LotArea</li>
+</ul>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

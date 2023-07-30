@@ -1,0 +1,12 @@
+name: cdc-presentation
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - jupyter
+  - pandas
+  - seaborn
+  - numpy
+  - python=3.11
+  - scikit-learn
+prefix: /opt/homebrew/Caskroom/miniconda/base/envs/cdc-presentation
