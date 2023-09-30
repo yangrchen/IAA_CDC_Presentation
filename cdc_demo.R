@@ -10,6 +10,8 @@ library(vcd)
 # Data manipulation tools
 library(tidyverse)
 library(reshape2)
+# LASSO
+library(glmnet)
 
 # COPY THIS FUNCTION:
 get_anova <- function(df, target){
@@ -130,6 +132,13 @@ create_report(
   output_dir = getwd(),
   config = configure_report()
 )
+
+# LASSO
+train_x <- model.matrix(Sale_Price ~ ., train)[, -1]
+train_y <- train$Sale_Price
+lasso_model <- glmnet(x = train_x, y = train_y, alpha = 1)
+fit_model = predict(lasso_model, data = train)
+
 
 
 
