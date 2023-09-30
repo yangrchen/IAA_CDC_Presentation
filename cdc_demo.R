@@ -1,9 +1,32 @@
-# Load Libraries
+# Load Housing Data
 library(AmesHousing)
-library(tidyverse)
+# Viz Package
 library(DataExplorer)
+library(ggplot2)
+# Regression tools
 library(car)
+# Categorical data tools
 library(vcd)
+# Data manipulation tools
+library(tidyverse)
+library(reshape2)
+
+# COPY THIS FUNCTION:
+get_anova <- function(df, target){
+  anova_res <- data.frame(Variable = character(0), P_Value = numeric(0))
+  # Loop through columns (excluding the target variable)
+  for (feature in names(df)) {
+    if (feature != target) {
+      # Perform ANOVA test
+      anova_result <- anova(lm(df[[target]] ~ df[[feature]]))
+      # Extract the p-value
+      p_value <- anova_result$"Pr(>F)"[1]
+      # Add the p-value to the p_values_df data frame
+      anova_res <- rbind(anova_res, data.frame(Variable = feature, P_Value = p_value))
+    }
+  }
+  return(anova_res)
+}
 
 # Load in our housing data
 set.seed(123)
@@ -34,19 +57,36 @@ plot_correlation(na.omit(c))
 
 # Now we will examine our discrete variables
 d <- output$discrete
-plot_density(train, by = "Sale_Price")
+d$Sale_Price <- train$Sale_Price
 
-# Show point biserial-correlation?
-plot_correlation(na.omit(d), type = "all")
+# And calculate ANOVA
+anova_res <- get_anova(d, "Sale_Price")
+d <- subset(d, select = c("Neighborhood", "Overall_Qual", "Sale_Price"))
+# Don't forget to check assumptions!
+# The observations are independent
+# The model residuals are normally distributed
+# The variances for each group are equal
+
+# Take a look at the visuals
+ggplot(data = d, aes(y = Sale_Price/1000, x = Overall_Qual, fill = Overall_Qual)) +
+  geom_boxplot() + 
+  labs(y = "Sales Price (Thousands $)", x = "Quality of Home") +
+  stat_summary(fun = mean, geom = "point", shape = 20, size = 5, color = "red", fill = "red") +
+  scale_fill_brewer(palette="Blues") + theme_classic() + coord_flip()
+
+# Combine our discrete and continuous back together
+selected_features = cbind(d,select(c, -Sale_Price))
 
 # Check for multicollinearity
-linear_model <- lm(Sale_Price ~ ., data = c)
+linear_model <- lm(Sale_Price ~ ., data = selected_features)
 vif(linear_model)
 
 # Remove problematic terms intuitively
-linear_model2 <- lm(Sale_Price ~ Gr_Liv_Area + Total_Bsmt_SF + Garage_Area, data = c)
+selected_features <- select(selected_features, -First_Flr_SF, -Second_Flr_SF)
+linear_model2 <- lm(Sale_Price ~ ., data = selected_features)
 vif(linear_model2)
 summary(linear_model2)
+
 
 # Discrete Example
 
@@ -55,12 +95,16 @@ train <- train %>%
   mutate(Bonus = ifelse(Sale_Price > 175000, 1, 0))
 
 # Visualizing relationships
-plot_bar(train, by = "Bonus")
+ggplot(data = train) +
+  geom_bar(mapping = aes(x = Bonus, fill = Overall_Qual))
+
+ggplot(data = train) +
+  geom_bar(mapping = aes(x = Bonus, fill = Central_Air))
 
 # Chi-Sq test
-# Check Assumption
 table(train$Central_Air, train$Bonus)
 csq <- chisq.test(table(train$Central_Air, train$Bonus))
+# Check Assumption
 csq$expected
 csq
 
@@ -69,7 +113,8 @@ csq
 assocstats(table(train$Central_Air, train$Bonus))
 
 # Goal model
-logistic_model <- glm(Bonus ~ Central_Air + Electrical, data = train, family = binomial(link = "logit"))
+logistic_model <- glm(Bonus ~ ., data = train, family = binomial(link = "logit"))
+# We can run vif here as well
 vif(logistic_model)
 
 # Get a summary of our data set
@@ -79,31 +124,12 @@ create_report(
   output_dir = getwd(),
   config = configure_report()
 )
-
 create_report(
   data = d,
   output_file = "practice_report.html",
   output_dir = getwd(),
   config = configure_report()
 )
-
-
-create_boxplots <- function(df, target_variable) {
-  # Get the list of predictor variables (exclude the target variable)
-  predictors <- setdiff(colnames(df), target_variable)
-  # Loop through each predictor
-  for (predictor in predictors) {
-    # Create a boxplot for the current predictor
-    current_plot <- ggplot(data = df, aes(y = factor(df[predictor]), x = df[target_variable], fill = df[target_variable])) +
-      geom_boxplot() + 
-      labs(y = target_variable, x = predictor) +
-      stat_summary(fun = mean, geom = "point", shape = 20, size = 5, color = "red", fill = "red") +
-      scale_fill_brewer(palette="Blues") + theme_classic() + coord_flip()
-    show(current_plot)
-  }
-}
-
-create_boxplots(train, "Sale_Price")
 
 
 
